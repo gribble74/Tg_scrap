@@ -21,20 +21,18 @@ def get_all_posts():
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Находим все посты на странице
             post_wraps = soup.find_all('div', class_='tgme_widget_message_wrap')
             
             if not post_wraps:
-                break  # больше нет постов
+                break
                 
-            for wrap in reversed(post_wraps):  # обрабатываем от новых к старым
+            for wrap in reversed(post_wraps):
                 post = parse_post(wrap)
-                if post and not any(p['link'] == post['link'] for p in posts):
+                if post and post.get('text') and post['text'].strip() != '':
                     posts.append(post)
                     if len(posts) >= MAX_POSTS:
                         break
             
-            # Получаем ссылку на предыдущую страницу
             prev_link = soup.find('a', class_='tme_messages_more')
             if not prev_link or len(posts) >= MAX_POSTS:
                 break
@@ -55,9 +53,13 @@ def parse_post(wrap):
         link = date_link['href'] if date_link else None
         date = date_link.find('time')['datetime'] if date_link and date_link.find('time') else str(datetime.now())
         
-        # Текст сообщения
+        # Текст сообщения с HTML-разметкой
         text_div = wrap.find('div', class_='tgme_widget_message_text')
-        text = text_div.get_text('\n').strip() if text_div else None
+        if not text_div:
+            return None
+            
+        # Сохраняем оригинальную HTML-разметку
+        text = ''.join(str(child) for child in text_div.contents)
         
         # Медиа (фото/видео)
         media = None
@@ -67,16 +69,15 @@ def parse_post(wrap):
             if 'url(' in style:
                 media = style.split("url('")[1].split("')")[0]
         
-        # Видео
+        # Видео (ищем превью)
         video = wrap.find('video')
-        if video and 'src' in video.attrs:
-            media = video['src']
+        if video and 'poster' in video.attrs:
+            media = video['poster']
         
-        # Документы/файлы
-        document = wrap.find('a', class_='tgme_widget_message_document')
-        if document and 'href' in document.attrs:
-            media = document['href']
-        
+        # Если видео без превью - пропускаем
+        if video and not media:
+            return None
+            
         return {
             'date': date,
             'link': link,
