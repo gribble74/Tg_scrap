@@ -48,56 +48,50 @@ def get_all_posts():
 
 def parse_post(wrap):
     try:
+        # Базовые данные
         date_link = wrap.find('a', class_='tgme_widget_message_date')
-        if not date_link:
-            return None
-            
-        link = date_link['href']
-        date = date_link.find('time')['datetime'] if date_link.find('time') else None
-        if not date:
-            return None
-
+        link = date_link['href'] if date_link else None
+        date = date_link.find('time')['datetime'] if date_link and date_link.find('time') else str(datetime.now())
+        
+        # Текст сообщения
         text_div = wrap.find('div', class_='tgme_widget_message_text')
-        text = str(text_div) if text_div else ''
+        text = str(text_div) if text_div else None
         
-        # Получаем медиа в максимальном качестве
-        media_url = None
+        # Определяем тип медиа
         media_type = None
+        media_url = None
         
-        # 1. Проверяем фото (оригиналы)
-        photo_link = wrap.find('a', class_='tgme_widget_message_photo_wrap')
-        if photo_link and photo_link.get('href'):
-            media_url = photo_link['href'].replace('t.me/', 'cdn4.telesco.pe/file/') + '.jpg'
-            media_type = 'photo'
+        # Проверяем фото
+        photo_wrap = wrap.find('a', class_='tgme_widget_message_photo_wrap')
+        if photo_wrap and 'style' in photo_wrap.attrs:
+            style = photo_wrap['style']
+            if 'background-image:' in style:
+                media_url = style.split("url('")[1].split("')")[0] if "url('" in style else None
+                media_type = 'photo' if media_url else None
         
-        # 2. Проверяем видео
+        # Проверяем видео
         if not media_url:
-            video = wrap.find('video')
-            if video and video.get('src'):
-                media_url = video['src']
-                media_type = 'video'
-        
-        # 3. Проверяем превью (fallback)
-        if not media_url:
-            thumb = wrap.find('i', class_='tgme_widget_message_video_thumb')
-            if thumb and 'style' in thumb.attrs:
-                style = thumb['style']
+            video_thumb = wrap.find('i', class_='tgme_widget_message_video_thumb')
+            if video_thumb and 'style' in video_thumb.attrs:
+                style = video_thumb['style']
                 if 'background-image:' in style:
-                    media_url = style.split("url('")[1].split("')")[0]
-                    media_type = 'video'
+                    media_url = style.split("url('")[1].split("')")[0] if "url('" in style else None
+                    media_type = 'video' if media_url else None
         
         return {
             'date': date,
             'link': link,
-            'text': text.strip(),
-            'media': normalize_media_url(media_url),
+            'text': text.strip() if text else '',
+            'media': media_url,
             'media_type': media_type,
             'has_media': bool(media_url),
-            'has_text': bool(text.strip())
+            'has_text': bool(text and text.strip())
         }
+        
     except Exception as e:
-        logging.error(f"Error parsing post: {e}", exc_info=True)
+        print(f"Error parsing post: {e}")
         return None
+
 def save_posts(posts):
     try:
         os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
