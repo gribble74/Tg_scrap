@@ -53,13 +53,16 @@ def parse_post(wrap):
         link = date_link['href'] if date_link else None
         date = date_link.find('time')['datetime'] if date_link and date_link.find('time') else str(datetime.now())
         
-        # Текст сообщения с HTML-разметкой
+        # Текст сообщения с сохранением HTML-разметки
         text_div = wrap.find('div', class_='tgme_widget_message_text')
         if not text_div:
             return None
             
-        # Сохраняем оригинальную HTML-разметку
-        text = ''.join(str(child) for child in text_div.contents)
+        # Сохраняем всю HTML-разметку
+        text = str(text_div)
+        
+        # Удаляем внешний div, оставляя только содержимое
+        text = text.replace('<div class="tgme_widget_message_text">', '').replace('</div>', '')
         
         # Медиа (фото/видео)
         media = None
@@ -81,10 +84,10 @@ def parse_post(wrap):
         return {
             'date': date,
             'link': link,
-            'text': text,
+            'text': text.strip(),
             'media': media,
             'has_media': bool(media),
-            'has_text': bool(text)
+            'has_text': bool(text.strip())
         }
         
     except Exception as e:
