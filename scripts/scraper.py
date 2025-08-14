@@ -57,27 +57,34 @@ def parse_post(wrap):
         text_div = wrap.find('div', class_='tgme_widget_message_text')
         text = str(text_div) if text_div else None
         
-        # Медиа (фото)
-        media = None
+        # Определяем тип медиа
+        media_type = None
+        media_url = None
+        
+        # Проверяем фото
         photo_wrap = wrap.find('a', class_='tgme_widget_message_photo_wrap')
         if photo_wrap and 'style' in photo_wrap.attrs:
             style = photo_wrap['style']
             if 'background-image:' in style:
-                media = style.split("url('")[1].split("')")[0] if "url('" in style else None
+                media_url = style.split("url('")[1].split("')")[0] if "url('" in style else None
+                media_type = 'photo' if media_url else None
         
-        # Видео (ищем превью)
-        video_thumb = wrap.find('i', class_='tgme_widget_message_video_thumb')
-        if video_thumb and 'style' in video_thumb.attrs:
-            style = video_thumb['style']
-            if 'background-image:' in style:
-                media = style.split("url('")[1].split("')")[0] if "url('" in style else None
+        # Проверяем видео
+        if not media_url:
+            video_thumb = wrap.find('i', class_='tgme_widget_message_video_thumb')
+            if video_thumb and 'style' in video_thumb.attrs:
+                style = video_thumb['style']
+                if 'background-image:' in style:
+                    media_url = style.split("url('")[1].split("')")[0] if "url('" in style else None
+                    media_type = 'video' if media_url else None
         
         return {
             'date': date,
             'link': link,
             'text': text.strip() if text else '',
-            'media': media,
-            'has_media': bool(media),
+            'media': media_url,
+            'media_type': media_type,
+            'has_media': bool(media_url),
             'has_text': bool(text and text.strip())
         }
         
