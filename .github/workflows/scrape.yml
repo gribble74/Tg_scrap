@@ -2,7 +2,7 @@ name: Scrape Telegram Posts
 
 on:
   schedule:
-    - cron: '0 */2 * * *'  # Запускать каждые 2 часа
+    - cron: '0 */6 * * *'  # Запускать каждые 2 часа
   workflow_dispatch:        # Разрешить ручной запуск
 
 jobs:
