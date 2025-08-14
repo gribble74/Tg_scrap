@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 import os
 from urllib.parse import urljoin
+import re
 
 CHANNEL_NAME = "ordendog"
 BASE_URL = f"https://t.me/s/{CHANNEL_NAME}"
@@ -29,9 +30,11 @@ def get_all_posts():
             for wrap in reversed(post_wraps):
                 post = parse_post(wrap)
                 if post and post.get('text') and post['text'].strip() != '':
-                    posts.append(post)
-                    if len(posts) >= MAX_POSTS:
-                        break
+                    # Проверка на дубликаты по ссылке
+                    if not any(p['link'] == post['link'] for p in posts):
+                        posts.append(post)
+                        if len(posts) >= MAX_POSTS:
+                            break
             
             prev_link = soup.find('a', class_='tme_messages_more')
             if not prev_link or len(posts) >= MAX_POSTS:
@@ -53,39 +56,51 @@ def parse_post(wrap):
         link = date_link['href'] if date_link else None
         date = date_link.find('time')['datetime'] if date_link and date_link.find('time') else str(datetime.now())
         
-        # Текст сообщения с сохранением HTML-разметки
+        # Текст сообщения: извлекаем только содержимое, без внешнего div
         text_div = wrap.find('div', class_='tgme_widget_message_text')
         if not text_div:
             return None
             
-        # Сохраняем всю HTML-разметку
-        text = str(text_div)
+        # Удаляем внешний div, сохраняя внутреннюю разметку (например, <b>, <a>)
+        text = ''.join(str(child) for child in text_div.contents)
         
-        # Удаляем внешний div, оставляя только содержимое
-        text = text.replace('<div class="tgme_widget_message_text">', '').replace('</div>', '')
+        # Очистка лишних пробелов и переносов строк
+        text = re.sub(r'\s+', ' ', text).strip()
         
         # Медиа (фото/видео)
         media = None
+        media_type = None
+        
+        # Фото
         photo_wrap = wrap.find('a', class_='tgme_widget_message_photo_wrap')
         if photo_wrap and 'style' in photo_wrap.attrs:
             style = photo_wrap['style']
             if 'url(' in style:
                 media = style.split("url('")[1].split("')")[0]
+                media_type = 'photo'
         
-        # Видео (ищем превью)
+        # Видео (ищем превью или прямую ссылку)
         video = wrap.find('video')
-        if video and 'poster' in video.attrs:
-            media = video['poster']
+        if video:
+            if 'poster' in video.attrs:
+                media = video['poster']
+                media_type = 'video'
+            elif 'src' in video.attrs:
+                media = video['src']
+                media_type = 'video'
         
-        # Если видео без превью - пропускаем
-        if video and not media:
-            return None
-            
+        # Документы (например, PDF)
+        document = wrap.find('a', class_='tgme_widget_message_document')
+        if document and 'href' in document.attrs:
+            media = document['href']
+            media_type = 'document'
+        
         return {
             'date': date,
             'link': link,
-            'text': text.strip(),
+            'text': text,
             'media': media,
+            'media_type': media_type,
             'has_media': bool(media),
             'has_text': bool(text.strip())
         }
