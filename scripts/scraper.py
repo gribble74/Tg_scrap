@@ -5,6 +5,7 @@ from datetime import datetime
 import os
 from urllib.parse import urljoin
 import re
+from bs4.element import Comment
 
 CHANNEL_NAME = "ordendog"
 BASE_URL = f"https://t.me/s/{CHANNEL_NAME}"
@@ -30,7 +31,6 @@ def get_all_posts():
             for wrap in reversed(post_wraps):
                 post = parse_post(wrap)
                 if post and post.get('text') and post['text'].strip() != '':
-                    # Проверка на дубликаты по ссылке
                     if not any(p['link'] == post['link'] for p in posts):
                         posts.append(post)
                         if len(posts) >= MAX_POSTS:
@@ -49,6 +49,37 @@ def get_all_posts():
     
     return posts[:MAX_POSTS]
 
+def tag_visible(element):
+    if element.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]']:
+        return False
+    if isinstance(element, Comment):
+        return False
+    return True
+
+def clean_html(text_div):
+    # Удаляем все теги кроме разрешенных
+    allowed_tags = ['b', 'strong', 'i', 'em', 'a', 'br', 'span']
+    soup = BeautifulSoup(text_div, 'html.parser')
+    
+    # Конвертируем эмодзи Telegram в Unicode
+    for emoji in soup.find_all('i', class_='emoji'):
+        emoji.replace_with(emoji.get_text())
+    
+    # Удаляем все неразрешенные теги
+    for tag in soup.find_all(True):
+        if tag.name not in allowed_tags:
+            tag.unwrap()
+    
+    # Очищаем атрибуты (оставляем только href для ссылок)
+    for tag in soup.find_all(True):
+        if tag.name == 'a':
+            attrs = {'href': tag.get('href', '')}
+            tag.attrs = attrs
+        else:
+            tag.attrs = {}
+    
+    return str(soup)
+
 def parse_post(wrap):
     try:
         # Базовые данные
@@ -56,18 +87,15 @@ def parse_post(wrap):
         link = date_link['href'] if date_link else None
         date = date_link.find('time')['datetime'] if date_link and date_link.find('time') else str(datetime.now())
         
-        # Текст сообщения: извлекаем только содержимое, без внешнего div
+        # Текст сообщения
         text_div = wrap.find('div', class_='tgme_widget_message_text')
         if not text_div:
             return None
             
-        # Удаляем внешний div, сохраняя внутреннюю разметку (например, <b>, <a>)
-        text = ''.join(str(child) for child in text_div.contents)
+        # Получаем чистый HTML с сохранением форматирования
+        text = clean_html(str(text_div))
         
-        # Очистка лишних пробелов и переносов строк
-        text = re.sub(r'\s+', ' ', text).strip()
-        
-        # Медиа (фото/видео)
+        # Медиа (фото/видео/документы)
         media = None
         media_type = None
         
@@ -79,7 +107,7 @@ def parse_post(wrap):
                 media = style.split("url('")[1].split("')")[0]
                 media_type = 'photo'
         
-        # Видео (ищем превью или прямую ссылку)
+        # Видео
         video = wrap.find('video')
         if video:
             if 'poster' in video.attrs:
@@ -89,7 +117,7 @@ def parse_post(wrap):
                 media = video['src']
                 media_type = 'video'
         
-        # Документы (например, PDF)
+        # Документы
         document = wrap.find('a', class_='tgme_widget_message_document')
         if document and 'href' in document.attrs:
             media = document['href']
