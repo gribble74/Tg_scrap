@@ -1,0 +1,36 @@
+name: Scrape Telegram Posts
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Запускать каждые 2 часа
+  workflow_dispatch:        # Разрешить ручной запуск
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      run: |
+        cd scripts
+        pip install -r requirements.txt
+        
+    - name: Run scraper
+      run: |
+        cd scripts
+        python scraper.py
+        
+    - name: Commit and push changes
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        git add data/posts.json
+        git commit -m "Update posts [skip ci]" || echo "No changes to commit"
+        git push
