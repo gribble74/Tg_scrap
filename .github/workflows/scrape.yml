@@ -2,7 +2,7 @@ name: Scrape Telegram Posts
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # Запускать каждые 6 часа
+    - cron: '0 */2 * * *'  # Запускать каждые 2 часа
   workflow_dispatch:        # Разрешить ручной запуск
 
 jobs:
@@ -24,7 +24,6 @@ jobs:
         
     - name: Run scraper
       run: |
-        mkdir -p data  # Создаем папку data, если её нет
         cd scripts
         python scraper.py
         
@@ -32,14 +31,6 @@ jobs:
       run: |
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
-        
-        # Проверяем, есть ли изменения для коммита
         git add data/posts.json
-        
-        # Используем git diff-index для проверки изменений
-        if git diff-index --quiet HEAD --; then
-          echo "No changes to commit"
-        else
-          git commit -m "Update posts [skip ci]"
-          git push
-        fi
+        git commit -m "Update posts [skip ci]" || echo "No changes to commit"
+        git push
